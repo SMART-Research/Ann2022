@@ -1,0 +1,333 @@
+---
+title: "EDA_Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme: 
+      version: 4
+      bootswatch: flatly
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+
+thematic::thematic_rmd(font = "auto")
+library(flexdashboard)
+library(plotly)
+library(tidyverse)
+library(DT)
+library(shiny)
+library(dplyr)
+```
+
+
+Intro {data-orientation=rows}
+=====================================
+
+{.sidebar data-width=200}
+------------------------------------------
+
+```{r}
+
+fileInput("file","Choose CSV file",
+          multiple = FALSE,
+          accept = c("text/csv",
+                     "text/comma-seperated-values,text/plain",
+                     ".csv"))
+
+```
+
+
+Row {data-height=300}
+-------------------------------------
+
+### The dataset
+
+
+
+
+```{r}
+
+renderTable({
+  
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  glimpse(df)
+  
+})
+
+```
+
+
+Column {.tabset}
+------------------------------------
+
+### Distribution of Quantitative Variables
+
+```{r}
+library(DT)
+renderDataTable({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  
+  library(data.table)
+  library(summarytools)
+
+  datatable(round(descr(df),3), fillContainer = T)
+  
+})
+
+```
+
+### Composition of Qualitative Variables
+
+<style> #dt{ overflow: auto; } </style>   
+
+
+
+```{r}
+selectInput("Categorical_0","Select the Categorical Variable",choices =c())
+
+observe({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  
+  Categorical_df <- df %>%
+    select_if(is.character)
+  
+  
+  Cate <- colnames(Categorical_df)
+  
+  updateSelectInput(session,"Categorical_0",choices = Cate)
+})
+
+```
+
+
+```{r}
+
+library(DT)
+renderDataTable({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  
+  library(data.table)
+  library(summarytools)
+  
+
+  datatable(round(freq(df[[input$Categorical_0]]),3), fillContainer = T)
+  
+})
+
+
+```
+
+
+Relationship between a Quantitative and a Qualitative variable
+=====================================
+
+Column {.sidebar data-width=200}
+---------------------------------------
+
+```{r} 
+
+selectInput("Numerical","Select the Numerical Variable",choices =c())
+selectInput("Categorical","Select the Categorical Variable",choices =c())
+
+observe({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  Numerical_df <- df%>% 
+    select_if(is.numeric)
+  Categorical_df <- df %>%
+    select_if(is.character)
+  
+  Num <- colnames(Numerical_df)
+  Cate <- colnames(Categorical_df)
+  
+  updateSelectInput(session,"Numerical",choices = Num)
+  updateSelectInput(session,"Categorical",choices = Cate)
+})
+
+```
+
+
+Column {data-width=650}
+-------------------------------------
+
+
+
+### Box-Plot
+
+```{r}
+renderPlotly({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+   plot_ly(df,
+              x = ~df[[input$Numerical]],
+              color = ~df[[input$Categorical]],
+              colors = "Paired",
+              type = "box") %>%
+  layout(title = "",
+         xaxis = list(title = "" ,
+                      zeroline = FALSE))
+})
+```
+
+Column {data-width=350}
+-------------------------------------
+
+### Distribution of the Categorical Variable
+
+```{r}
+renderPlotly({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  df %>%
+    count(var = df[[input$Categorical]], name = "count") %>%
+    plot_ly( x = ~var, y = ~ count, type = "bar", marker = list(color = '#008ae6',
+                           line = list(color = '#008ae6', width = 2)), hoverinfo = "x+y") %>%
+    add_text(text = ~paste0( " (",   scales::percent(count/sum(count)),")"), 
+           textposition = "bottom", 
+           textfont = list(size = 12, color = "white"), 
+           showlegend = FALSE) %>%
+    layout(xaxis = list(title = ""), yaxis = list(title = ""))
+    
+})
+```
+
+
+### Distribution of the Numerical Variable
+
+```{r}
+renderPlotly({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  plot_ly(x = df[[input$Numerical]], type = "histogram",  marker = list(color = "#008ae6",
+                            line = list(color = "darkgray",
+                                        width = 1)))
+})
+```
+
+
+Relationship between two Quantiative variables and a Qualitative variable {data-orientation=column}
+=====================================
+
+
+Column {.sidebar data-width=200}
+---------------------------------------
+
+```{r}
+selectInput("Numerical_1","Select a Numerical Variable for X-axis",choices =c())
+selectInput("Numerical_2","Select a Numerical Variable for Y-axis",choices =c())
+selectInput("Categorical_1","Select a Categorical Variable",choices =c())
+
+
+observe({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  Numerical_df <- df%>% 
+    select_if(is.numeric)
+  Categorical_df <- df %>%
+    select_if(is.character)
+  
+  Num <- colnames(Numerical_df)
+  Cate <- colnames(Categorical_df)
+  
+  updateSelectInput(session,"Numerical_1",choices = Num)
+  updateSelectInput(session,"Numerical_2",choices = Num)
+  updateSelectInput(session,"Categorical_1",choices = Cate)
+})
+```
+
+Column
+---------------------------------------
+### Correlation between Variables
+
+```{r}
+
+renderPlotly({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+ p <- ggplot(df, aes(x = df[[input$Numerical_1]], y = df[[input$Numerical_2]], fill = df[[input$Categorical_1]])) + 
+   xlab ("Numerical_1") +
+   ylab ("Numerical_2") + 
+  geom_jitter(aes(color = df[[input$Categorical_1]] ))
+ggplotly(p)
+})
+```
+
+
+Relationship between Two Qualitative Variables
+==============================================
+
+Column {.sidebar data-width=200}
+---------------------------------------
+
+```{r}
+
+
+selectInput("Categorical_21","Select a Categorical Variable",choices =c())
+selectInput("Categorical_22","Select a Categorical Variable",choices =c())
+
+
+observe({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+  
+  Numerical_df <- df%>% 
+    select_if(is.numeric)
+  Categorical_df <- df %>%
+    select_if(is.character)
+  
+  Num <- colnames(Numerical_df)
+  Cate <- colnames(Categorical_df)
+  
+
+  updateSelectInput(session,"Categorical_21",choices = Cate)
+  updateSelectInput(session,"Categorical_22",choices = Cate)
+})
+
+```
+
+Column
+---------------------
+
+### Mosaic Plot
+
+```{r}
+library(ggmosaic)
+
+renderPlotly({
+  req(input$file)
+  df <- read_csv(input$file$datapath)
+
+  
+
+  print(input$Categorical_21)
+  print(input$Categorical_22)
+  
+  
+q <- ggplot(df ) +
+  geom_mosaic(aes(x = product(!!sym(input$Categorical_21), !!sym(input$Categorical_22)), fill=!!sym(input$Categorical_21)))
+
+
+ggplotly(q)
+
+
+})
+
+
+
+```
+
